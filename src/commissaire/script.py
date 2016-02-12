@@ -30,6 +30,13 @@ import gevent
 
 from gevent.pywsgi import WSGIServer
 
+from commissaire.compat.urlparser import urlparse
+from commissaire.compat import exception
+from commissaire.config import Config, cli_etcd_or_default
+from commissaire.handlers.clusters import (
+    ClustersResource, ClusterResource,
+    ClusterHostsResource, ClusterSingleHostResource,
+    ClusterRestartResource, ClusterUpgradeResource)
 from commissaire.handlers.hosts import HostsResource, HostResource
 from commissaire.handlers.status import StatusResource
 from commissaire.queues import INVESTIGATE_QUEUE
@@ -96,7 +103,7 @@ def router(q):  # pragma: no cover
 '''
 
 
-def create_app(store):  # pragma: no cover
+def create_app(store):
     """
     Creates a new WSGI compliant commissaire application.
 
@@ -115,27 +122,80 @@ def create_app(store):  # pragma: no cover
     app = falcon.API(middleware=[http_auth, JSONify()])
 
     app.add_route('/api/v0/status', StatusResource(store, None))
+    app.add_route('/api/v0/cluster/{name}', ClusterResource(store, None))
+    app.add_route(
+        '/api/v0/cluster/{name}/hosts',
+        ClusterHostsResource(store, None))
+    app.add_route(
+        '/api/v0/cluster/{name}/hosts/{address}',
+        ClusterSingleHostResource(store, None))
+    app.add_route(
+        '/api/v0/cluster/{name}/restart',
+        ClusterRestartResource(store, None))
+    app.add_route(
+        '/api/v0/cluster/{name}/upgrade',
+        ClusterUpgradeResource(store, None))
+    app.add_route('/api/v0/clusters', ClustersResource(store, None))
     app.add_route('/api/v0/host/{address}', HostResource(store, None))
     app.add_route('/api/v0/hosts', HostsResource(store, None))
     return app
+
+
+def parse_uri(uri, name):
+    """
+    Parses and returns a parsed URI.
+
+    :param uri: The URI to parse.
+    :type uri: str
+    :param name: The name to use for errors.
+    :type name: str
+    :returns: A parsed URI.
+    :rtype: ParseResult
+    :raises: Exception
+    """
+    parsed = urlparse(uri)
+    # Verify we have what we need
+    if not uri or None in (parsed.port, parsed.hostname, parsed.scheme):
+        raise Exception(
+            ('You must provide a full {0} URI. '
+             'EX: http://127.0.0.1:2379'.format(name)))
+    return parsed
 
 
 def main():  # pragma: no cover
     """
     Main script entry point.
     """
-    import sys
-    import urlparse
+    import argparse
+    from commissaire.config import Config
 
-    # TODO: Use argparse
+    config = Config()
+
+    epilog = ('Example: ./commissaire -e http://127.0.0.1:2379'
+              ' -k http://127.0.0.1:8080')
+
+    parser = argparse.ArgumentParser(epilog=epilog)
+    parser.add_argument(
+        '--listen-interface', '-i', type=str, help='Interface to listen on')
+    parser.add_argument(
+        '--listen-port', '-p', type=int, help='Port to listen on')
+    parser.add_argument(
+        '--etcd-uri', '-e', type=str, required=True,
+        help='Full URI for etcd EX: http://127.0.0.1:2379')
+    parser.add_argument(
+        '--kube-uri', '-k', type=str, required=True,
+        help='Full URI for kubernetes EX: http://127.0.0.1:8080')
+    args = parser.parse_args()
+
     try:
-        etcd_uri = urlparse.urlparse(sys.argv[1])
-    except:
-        sys.stdout.write(
-            'You must provide an etcd url. EX: http://127.0.0.1:2379\n')
-        raise SystemExit(1)
+        config.etcd['uri'] = parse_uri(args.etcd_uri, 'etcd')
+        config.kubernetes['uri'] = parse_uri(args.kube_uri, 'kube')
+    except Exception:
+        _, ex, _ = exception.raise_if_not(Exception)
+        parser.error(ex)
 
-    ds = etcd.Client(host=etcd_uri.hostname, port=etcd_uri.port)
+    ds = etcd.Client(
+        host=config.etcd['uri'].hostname, port=config.etcd['uri'].port)
 
     try:
         logging.config.dictConfig(
@@ -145,19 +205,33 @@ def main():  # pragma: no cover
         with open('./conf/logger.json', 'r') as logging_default_cfg:
             logging.config.dictConfig(json.loads(logging_default_cfg.read()))
             logging.warn('No logger configuration in Etcd. Using defaults.')
-    except etcd.EtcdConnectionFailed as ecf:
+    except etcd.EtcdConnectionFailed:
+        _, ecf, _ = exception.raise_if_not(etcd.EtcdConnectionFailed)
         err = 'Unable to connect to Etcd: {0}. Exiting ...'.format(ecf)
         logging.fatal(err)
-        sys.stderr.write('{0}\n'.format(err))
+        parser.error('{0}\n'.format(err))
         raise SystemExit(1)
 
-    POOLS['investigator'].spawn(investigator, INVESTIGATE_QUEUE, ds)
+    interface = cli_etcd_or_default(
+        'listeninterface', args.listen_interface, '0.0.0.0', ds)
+    port = cli_etcd_or_default('listenport', args.listen_port, 8000, ds)
+    config.etcd['listen'] = urlparse('http://{0}:{1}'.format(
+        interface, port))
+
+    try:
+        config.kubernetes['token'] = ds.get(
+            '/commissaire/config/kubetoken').value
+        logging.debug('Config: {0}'.format(config))
+        POOLS['investigator'].spawn(
+            investigator, INVESTIGATE_QUEUE, config, ds)
+    except etcd.EtcdKeyNotFound:
+        parser.error('"/commissaire/config/kubetoken" must be set in etcd!')
     # watch_thread = gevent.spawn(host_watcher, ROUTER_QUEUE, ds)
     # router_thread = gevent.spawn(router, ROUTER_QUEUE)
 
     app = create_app(ds)
     try:
-        WSGIServer(('127.0.0.1', 8000), app).serve_forever()
+        WSGIServer((interface, int(port)), app).serve_forever()
     except KeyboardInterrupt:
         pass
 

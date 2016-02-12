@@ -16,35 +16,21 @@
 Test cases for the commissaire.oscmd.rhel module.
 """
 
-from . import TestCase
+from . test_oscmd import _Test_OSCmd
 from commissaire.oscmd import rhel
 
 
-class Test_RHEL_OSCmd(TestCase):
+class Test_RHEL_OSCmd(_Test_OSCmd):
     """
     Tests for the OSCmd class for RHEL.
     """
 
-    def before(self):
-        """
-        Sets up a fresh instance of the class before each run.
-        """
-        self.instance = rhel.OSCmd()
+    oscmdcls = rhel.OSCmd
 
-    def test_rhel_oscmd_reboot(self):
+    def test_rhel_oscmd_commands(self):
         """
-        Verify RHEL's OSCmd returns proper data on reboot.
+        Verify RHEL's OSCmd returns proper data on restart.
         """
-        cmd = self.instance.reboot()
-        self.assertEquals(
-            list,
-            type(cmd))
-
-    def test_rhel_oscmd_base_upgrade(self):
-        """
-        Verify RHEL's OSCmd returns proper data on upgrade.
-        """
-        cmd = self.instance.upgrade()
-        self.assertEquals(
-            list,
-            type(cmd))
+        for meth in self.expected_methods:
+            cmd = getattr(self.instance, meth)()
+            self.assertEquals(list, type(cmd))

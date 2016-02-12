@@ -27,9 +27,9 @@ class OSCmd(OSCmdBase):
     #: The type of Operating System
     os_type = 'fedora'
 
-    def reboot(self):
+    def restart(self):
         """
-        Fedora reboot command.
+        Fedora restart command.
 
         :return: The command to execute as a list
         :rtype: list
@@ -44,3 +44,30 @@ class OSCmd(OSCmdBase):
         :rtype: list
         """
         return ['dnf', 'update', '-y']
+
+    def install_docker(self):
+        """
+        Fedora install docker command.
+
+        :return: The command to execute as a list
+        :rtype: list
+        """
+        return ['dnf', 'install', '-y', 'docker']
+
+    def install_flannel(self):
+        """
+        Fedora install flannel command.
+
+        :return: The command to execute as a list
+        :rtype: list
+        """
+        return ['dnf', 'install', '-y', 'flannel']
+
+    def install_kube(self):
+        """
+        Fedora install Kube command.
+
+        :return: The command to execute as a list
+        :rtype: list
+        """
+        return ['dnf', 'install', '-y', 'kubernetes-node']

@@ -1,9 +1,236 @@
 REST Endpoints
 ==============
 
+Cluster
+-------
+**Endpoint**: /api/v0/cluster/{NAME}
+
+GET
+```
+Retrieve the status of the cluster.
+
+.. code-block:: javascript
+
+   {
+       "status" string,
+       "hosts": {
+           "total": int,
+           "available": int,
+           "unavailable": int
+       }
+   }
+
+Example
+~~~~~~~
+
+.. code-block:: javascript
+
+   {
+       "status": "ok",
+       "hosts": {
+           "total": 3,
+           "available": 3,
+           "unavailable": 0
+       }
+   }
+
+PUT
+```
+Creates a new cluster.
+
+No body.
+
+
+Cluster Members
+---------------
+**Endpoint**: /api/v0/cluster/{NAME}/hosts
+
+GET
+```
+Retrieve the host list for a cluster.
+
+.. code-block:: javascript
+
+   [
+       host_address,...
+   ]
+
+Example
+~~~~~~~
+
+.. code-block:: javascript
+
+   [
+       "192.168.100.50",
+       "192.168.100.51"
+   ]
+
+PUT
+```
+Replace the host list for a cluster.  The "old" list must match the
+current host list.
+
+.. code-block:: javascript
+
+   {
+       "old": [host_address,...]
+       "new": [host_address,...]
+   }
+
+Example
+~~~~~~~
+
+.. code-block:: javascript
+
+   {
+       "old": ["192.168.100.50"],
+       "new": ["192.168.100.50", "192.168.100.51"]
+   }
+
+
+Cluster Members (Individual)
+----------------------------
+**Endpoint**: /api/v0/cluster/{NAME}/hosts/{IP}
+
+GET
+```
+Membership test.  Returns 200 if host {IP} is in cluster, else 404.
+
+PUT
+```
+Adds host {IP} to cluster. (Idempotent)
+
+No body.
+
+DELETE
+``````
+Removes host {IP} from cluster. (Idempotent)
+
+No body.
+
+
+
+Cluster Operations: Upgrade
+---------------------------
+**Endpoint**: /api/v0/cluster/{NAME}/upgrade
+
+GET
+```
+Retrieve the current status of upgrades.
+
+.. code-block:: javascript
+
+   {
+       "status": string,
+       "upgrade_to": string,
+       "upgraded": HOST_LIST,
+       "in_process": HOST_LIST,
+       "started_at": string,
+       "finished_at": string
+   }
+
+Example
+~~~~~~~
+
+.. code-block:: javascript
+
+   {
+       "status": "in_process",
+       "upgrade_to": "7.2.1",
+       "upgraded": [{...}],
+       "in_process": [{...}],
+       "started_at": "2015-12-17T15:48:18.710454",
+       "finished_at": null
+   }
+
+PUT
+```
+Start a new upgrade.
+
+.. code-block:: javascript
+
+   {
+       "upgrade_to": string
+   }
+
+Example
+~~~~~~~
+
+.. code-block:: javascript
+
+   {
+       "upgrade_to": "7.2.1"
+   }
+
+Example Response
+~~~~~~~~~~~~~~~~
+
+.. code-block:: javascript
+
+   {
+       "status": "in_process",
+       "upgrade_to": "7.2.1",
+       "upgraded": [{...}],
+       "in_process": [{...}],
+       "started_at": "2015-12-17T15:48:18.710454",
+       "finished_at": null
+   }
+
+
+
+Cluster Operations: Restart
+---------------------------
+**Endpoint**: /api/v0/cluster/{NAME}/restart
+
+GET
+```
+Retrieve the status of a restart.
+
+.. code-block:: javascript
+
+   {
+       "status": string,
+       "restarted": HOST_LIST,
+       "in_process": HOST_LIST,
+       "started_at": string,
+       "finished_at": string
+   }
+
+Example
+~~~~~~~
+
+.. code-block:: javascript
+
+   {
+       "status": "in_process",
+       "restarted": [{...}],
+       "in_process": [{...}],
+       "started_at": "2015-12-17T15:48:18.710454",
+       "finished_at": null
+   }
+
+PUT
+```
+Create a new restart.
+
+No body.
+
+Example Response
+~~~~~~~~~~~~~~~~
+
+   {
+       "status": "in_process",
+       "restarted": [{...}],
+       "in_process": [{...}],
+       "started_at": "2015-12-17T15:48:18.710454",
+       "finished_at": null
+   }
+
+
+
 Clusters
 --------
-**Endpoint**: /api/v0/cluster/{IP}
+**Endpoint**: /api/v0/cluster/
 
 GET
 ```
@@ -76,8 +303,8 @@ Creates a new host record.
 .. code-block:: javascript
 
    {
-       "address": string      // The IP address of the cluster host
        "ssh_priv_key": string // base64 encoded ssh private key
+       "cluster": string      // Optional cluster the host should be associated with
    }
 
 .. note::
@@ -89,7 +316,7 @@ Example
 .. code-block:: javascript
 
    {
-       "address": "192.168.100.50",
+       "cluster": "default",
        "ssh_priv_key": "dGVzdAo..."
    }
 
@@ -203,8 +430,16 @@ Retrieve a the status of the system.
                "size": int,             // Total size of the investigator pool
                "in_use": int,           // Amount of the pool in use
                "errors": [string,...],  // Errors from the pool
+           },
+       },
+       "clusterexecpool": {
+           "status": enum(string),      // Status of the clusterexec pool
+           "info": {
+               "size": int,             // Total size of the clusterexec pool
+               "in_use": int,           // Amount of the pool in use
+               "errors": [string,...],  // Errors from the pool
            }
-       }
+       },
    }
 
 .. note::
@@ -228,5 +463,14 @@ Example
                "errors": []
            }
        }
+       "clusterexec": {
+           "status": "OK",
+           "info": {
+               "size": 5,
+               "in_use": 0,
+               "errors": []
+           }
+       }
+
    }
 

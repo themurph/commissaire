@@ -18,11 +18,30 @@ Test cases for the commissaire.jobs.investigator module.
 
 import etcd
 import mock
+import os
 
 from . import TestCase
-from commissaire.jobs.investigator import investigator
+from commissaire.compat.urlparser import urlparse
+
+from commissaire.jobs.investigator import clean_up_key, investigator
 from gevent.queue import Queue
 from mock import MagicMock
+
+
+class Test_CleanUpKey(TestCase):
+    """
+    Tests for clean_up_key function.
+    """
+
+    def test_clean_up_key(self):
+        """
+        Verify clean_up_key removes a given file.
+        """
+        f = open('clean_up_key_test_file', 'w')
+        f.close()
+        self.assertTrue(os.stat(f.name))
+        clean_up_key(f.name)
+        self.assertRaises(OSError, os.stat, f.name)
 
 
 class Test_JobsInvestigator(TestCase):
@@ -62,8 +81,18 @@ class Test_JobsInvestigator(TestCase):
             }
             ssh_priv_key = 'dGVzdAo='
 
+            connection_config = {
+                'etcd': {
+                    'uri': urlparse('http://127.0.0.1:2379'),
+                },
+                'kubernetes': {
+                    'uri': urlparse('http://127.0.0.1:8080'),
+                    'token': 'token',
+                }
+            }
+
             q.put_nowait((to_investigate, ssh_priv_key))
-            investigator(q, client, True)
+            investigator(q, connection_config, client, True)
 
             self.assertEquals(1, client.get.call_count)
-            self.assertEquals(1, client.set.call_count)
+            self.assertEquals(2, client.set.call_count)

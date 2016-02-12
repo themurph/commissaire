@@ -24,15 +24,34 @@ class OSCmdBase:
 
     #: The type of Operating System
     os_type = None
+    #: Full path to docker configuration file
+    docker_config = '/etc/sysconfig/docker'
+    #: Full path to the flanneld configuration file
+    flanneld_config = '/etc/sysconfig/flanneld'
+    #: Full path to kubernetes configuration file
+    kubernetes_config = '/etc/kubernetes/config'
+    #: Full path to kubernetes kubeconfig file
+    kubernetes_kubeconfig = '/var/lib/kubelet/kubeconfig'
+    #: Full path to kubelet configuration file
+    kubelet_config = '/etc/kubernetes/kubelet'
 
-    def reboot(self):
+    #: Docker service name
+    docker_service = 'docker'
+    #: Flannel service name
+    flannel_service = 'flanneld'
+    #: Kubernetes kubelet service name
+    kubelet_service = 'kubelet'
+    #: Kubernetes kube-proxy service name
+    kubelet_proxy_service = 'kube-proxy'
+
+    def restart(self):
         """
-        Reboot command. Must be overriden.
+        Restart command. Must be overriden.
 
         :return: The command to execute as a list
         :rtype: list
         """
-        raise NotImplementedError('{0}.reboot() must be overriden.'.format(
+        raise NotImplementedError('{0}.restart() must be overriden.'.format(
             self.__class__.__name__))
 
     def upgrade(self):
@@ -44,6 +63,39 @@ class OSCmdBase:
         """
         raise NotImplementedError('{0}.upgrade() must be overriden.'.format(
             self.__class__.__name__))
+
+    def install_docker(self):
+        """
+        Install Docker command. Must be overriden.
+
+        :return: The command to execute as a list
+        :rtype: list
+        """
+        raise NotImplementedError(
+            '{0}.install_docker() must be overriden.'.format(
+                self.__class__.__name__))
+
+    def install_flannel(self):
+        """
+        Install Flannel command. Must be overriden.
+
+        :return: The command to execute as a list
+        :rtype: list
+        """
+        raise NotImplementedError(
+            '{0}.install_flannel() must be overriden.'.format(
+                self.__class__.__name__))
+
+    def install_kube(self):
+        """
+        Install Kube command. Must be overriden.
+
+        :return: The command to execute as a list
+        :rtype: list
+        """
+        raise NotImplementedError(
+            '{0}.install_kube() must be overriden.'.format(
+                self.__class__.__name__))
 
 
 def get_oscmd(os_type):

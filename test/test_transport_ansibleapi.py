@@ -18,12 +18,15 @@ Test cases for the commissaire.transport.ansibleapi module.
 
 import logging
 
-from . import TestCase
+from . import TestCase, get_fixture_file_path
 
 from ansible.executor.task_result import TaskResult
 from ansible.inventory import Host
 from ansible.playbook.task import Task
+from commissaire.compat.urlparser import urlparse
+from commissaire.config import Config
 from commissaire.transport import ansibleapi
+from commissaire.oscmd import OSCmdBase
 from mock import MagicMock, patch
 
 
@@ -45,6 +48,8 @@ class Test_LogForward(TestCase):
         Verify failed results uses the logger.
         """
         result = TaskResult('127.0.0.1', Task(), {'exception': 'error'})
+        result._host = MagicMock()
+        result._host.get_name.return_value = '127.0.0.1'
 
         self.logforward.v2_runner_on_failed(result)
         self.assertEqual(1, self.logforward.log.warn.call_count)
@@ -106,7 +111,7 @@ class Test_Transport(TestCase):
                 },
             }
             transport.variable_manager._fact_cache = fact_cache
-            result, facts = transport.get_info('10.2.0.2', 'test/fake_key')
+            result, facts = transport.get_info('10.2.0.2', get_fixture_file_path('test/fake_key'))
             # We should have a successful response
             self.assertEquals(0, result)
             # We should match the expected facts
@@ -119,3 +124,32 @@ class Test_Transport(TestCase):
                 },
                 facts
             )
+
+    def test_bootstrap(self):
+        """
+        Verify Transport().bootstrap works as expected.
+        """
+        with patch('commissaire.transport.ansibleapi.TaskQueueManager') as _tqm:
+            _tqm().run.return_value = 0
+
+            transport = ansibleapi.Transport()
+            transport.variable_manager._fact_cache = {}
+            oscmd = MagicMock(OSCmdBase)
+
+            config = Config(
+                etcd={
+                    'uri': urlparse('http://127.0.0.1:2379'),
+                },
+                kubernetes={
+                    'uri': urlparse('http://127.0.0.1:8080'),
+                    'token': 'token',
+                }
+            )
+
+            result, facts = transport.bootstrap(
+                '10.2.0.2', 'test/fake_key', config, oscmd)
+            # We should have a successful response
+            self.assertEquals(0, result)
+            # We should see expected calls
+            self.assertEquals(1, oscmd.install_docker.call_count)
+            self.assertEquals(1, oscmd.install_kube.call_count)
